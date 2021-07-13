@@ -1,0 +1,7 @@
+/node_modules
+/.bcp
+.env
+.env.development
+.env.staging
+.env.production
+*.log
