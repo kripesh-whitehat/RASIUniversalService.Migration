@@ -5,7 +5,8 @@ module.exports = {
     INVALID_USER_EMAIL: "Invalid user email",
     INVALID_USER_PASSWORD: "Invalid user password",
     INVALID_CLUSTER: "Invalid cluster",
-    NO_DATA: "No data"
+    NO_DATA: "No data",
+    INVALID_USER_SECRET: "Invalid user secret"
 }
 
 

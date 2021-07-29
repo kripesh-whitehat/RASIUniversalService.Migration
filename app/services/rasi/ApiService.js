@@ -2,6 +2,7 @@ const Cluster = require('../../models').Cluster
 const sequelize = require('../../models').sequelize
 const axios = require('axios')
 const Message = require('../../infra/Messages')
+const config = require('../../../config')
 
 module.exports = {
 
@@ -11,11 +12,9 @@ module.exports = {
 
         try {
             const cluster = await Cluster.findByPk(req.params.cid);
-            if (!cluster) return { err: Message.INVALID_CLUSTER }
+            if (!cluster) return { err: Message.INVALID_CLUSTER }        
 
-            const hostname = process.env.NODE_ENV === 'production' ? '172.25.2.170' : cluster.hostname          
-
-            const url = 'http:\\\\' + hostname + ':' + cluster.port + '\\api\\' + type + '?cluster=' + cluster.slug;
+            const url = config.rasiRetrievalAPIUrl + '/' + type + '?cluster=' + cluster.slug;
             const response = await axios.get(url)
 
             if (!response.data) return { err: Message.NO_DATA }

@@ -1,5 +1,6 @@
 const Group = require('../models').Group;
 const sequelize = require('../models').Sequelize
+const _ = require('lodash')
 
 module.exports = {
 
@@ -15,18 +16,19 @@ module.exports = {
         return group
     },
     getClusterByGroup: async (req) => {
-        const unit = await Group.findAll({
-            where: { GroupName: { [sequelize.Op.iLike]: `%${req.params.group}%` } }, attributes: ['GroupID', 'GroupName']
+        const whereCondition = /^-?\d+$/.test(req.params.group) ? { GroupID: req.params.group } : { GroupName: { [sequelize.Op.iLike]: `%${req.params.group}%` } }
+        const group = await Group.findAll({
+            where: whereCondition, attributes: ['GroupID', 'GroupName']
             , include: { association: 'Clusters', attributes: ['cluster_name', 'hostname', 'slug'], where: { type: 'REGRESSION' } }
         });
-        return unit
+        return group
     },
     getProdClusterByGroup: async (req) => {
-        const unit = await Group.findAll({
+        const group = await Group.findAll({
             where: { GroupName: { [sequelize.Op.iLike]: `%${req.params.group}%` } }, attributes: ['GroupID', 'GroupName']
             , include: { association: 'Clusters', attributes: ['cluster_name', 'hostname', 'slug'], where: { type: 'PROD' } }
         });
-        return unit
+        return group
     },
 
 }

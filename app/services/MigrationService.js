@@ -103,6 +103,7 @@ module.exports = {
     },
     cancelMigration: async (req) => {
         try {
+            // run only if status = pending
             const id = get(req, 'params.id')
             if(!id)
                 return { message: 'ID not found.' }

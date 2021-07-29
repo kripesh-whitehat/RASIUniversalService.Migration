@@ -1,9 +1,7 @@
 const BCP = require('bcp')
 const fs = require('fs')
 const path = require('path')
-const { connect, query } = require('mssql')
-const { get } = require('lodash')
-
+const { ConnectionPool } = require('mssql')
 const queries = require('./queries')
 const { checkRDSConnection } = require('./universalMigration/index')
 const Migration = require('../models').Migration
@@ -11,18 +9,20 @@ const Migration = require('../models').Migration
 const getExportFile = (name, v = '') => path.join(__dirname, '..', '..', '.bcp', `export-${name}${v}.dat`)
 const getFormatFile = (name, v = '') => path.join(__dirname, '..', '..', '.bcp', `format-${name}${v}`)
 
+
 const exportFunc = async ({ migration_id, group_id, cluster_from }) => {  
   const bulkFunc = async (table, options, customOptions) => {
     const bcp = new BCP({
       ...options,
       checkConstraints: false,
       unicode: false,
-      native: true,
+      native: false,
     });
 
     return new Promise((resolve, reject) => {
       bcp.bulkExport(table, customOptions, async err => {
         if(err) {
+          clog(err)
           reject(err)
         } 
         resolve()
@@ -31,16 +31,17 @@ const exportFunc = async ({ migration_id, group_id, cluster_from }) => {
   }
 
   for(let i = 0; i < queries.length; i++) {
-    const { table, v, sql, database } = queries[i]
+    const { table, v = '', sql, database, tableowner } = queries[i]
     const options = {
       ...cluster_from,
       database,
+      schema: tableowner,
     }
     const customOptions = {
       read: false,
       keepFiles: true,
-      formatFile: getFormatFile(table, v),
-      exportFile: getExportFile(table, v),
+      formatFile: getFormatFile(`${database}.${tableowner}.${table}`, v),
+      exportFile: getExportFile(`${database}.${tableowner}.${table}`, v),
       sql: `select * ${sql(group_id)}`
     }
     try {
@@ -82,15 +83,16 @@ const importFunc = async ({ migration_id, cluster_to }) => {
   }
 
   for(let i = 0; i < queries.length; i++) {
-    const { table, v, database } = queries[i]
+    const { table, v = '', database, tableowner } = queries[i]
     const options = {
       ...cluster_to,
+      schema: tableowner,
       database,
     }
-    const customOptions = {read: false }
+    const customOptions = { read: false }
 
     try {
-     await bulkFunc(table, options, customOptions, getExportFile(table, v), getFormatFile(table, v))
+     await bulkFunc(table, options, customOptions, getExportFile(`${database}.${tableowner}.${table}`, v), getFormatFile(`${database}.${tableowner}.${table}`, v))
     } catch (err) {
       clog(err)
       await Migration.update({
@@ -109,28 +111,25 @@ const importFunc = async ({ migration_id, cluster_to }) => {
 }
 
 const removeExistingRecords = async ({ cluster_to, group_id }) => {
-  // later exchange to cluster_from since we are removing from cluster A
-  const sqlConfig = {
-    ...cluster_to,
-    pool: {
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 30000
-    },
-    options: {
-      trustServerCertificate: true
-    }
+  for(let i = queries.length; i > 0; i--) {
+    // console.log(`delete ${queries[i - 1].sql(group_id)}`)
+    new ConnectionPool({
+      ...cluster_to,
+      pool: {
+        max: 200,
+        min: 0,
+        idleTimeoutMillis: 30000
+      },
+      options: {
+        trustServerCertificate: true,
+        encrypt: true,
+      }
+    }).connect().then(pool => {
+      pool.query(`select * ${queries[i-1].sql(group_id)}`).then(resp => {
+        clog(resp)
+      })
+    }).catch(err => clog(err))
   }
-
-  // for(let i = 0; i < queries.length; i++) {
-  //   try {
-  //     await connect(sqlConfig)
-  //     await query(`delete from RSIAccounting.dbo.CorporateFinancialStatementBody where CorporateFinancialStatementLayoutID in (select CorporateFinancialStatementLayoutID from RSIAccounting.dbo.CorporateFinancialStatementLayout where CorporateID = ${group_id}`)
-  //    } catch (err) {
-  //      clog(err)
-  //    }
-  // }
-
 }
 
 const emptyDirFunc = async () => {
@@ -150,40 +149,20 @@ const emptyDirFunc = async () => {
 module.exports = {
   bulkMigration: async props => {
     let connection_error = false
-    if(!props.migration_id) return { msg: 'Migration not found.' }
-    
-    // Check connection cluster_from
-    await checkRDSConnection(get(props, 'cluster_from', {}), 'Cluster A').then(async ({ status, message }) => {
-      if(status === 'error') connection_error = true
+    if(!props.migration_id) {
       await Migration.update({
-        message,
-      }, { where: { id: props.migration_id } });
-    })
-    // Check connection cluster_to
-    await checkRDSConnection(get(props, 'cluster_to', {}), 'Cluster B').then(async ({ status, message }) => {
-      let resp_message = message
-      if(connection_error) {
-        if(status === 'error') {
-          resp_message = 'Cluster AB connection unsuccessful'
-          await Migration.update({
-            message: resp_message,
-          }, { where: { id: props.migration_id } })
-        }
-      } else {
-        if(status === 'error') connection_error = true
-        await Migration.update({
-          message: resp_message,
-        }, { where: { id: props.migration_id } })
-      }
-    })
+        message: 'Migration not found.',
+      }, { where: { id: props.migration_id } })
+      return { msg: 'Migration not found.' }
+    }
 
     if(!connection_error) {
       await emptyDirFunc()
+      // await removeExistingRecords(props)
+
       await exportFunc(props)
       await importFunc(props).then(async res => {
         if(!get(res, 'err')) {
-          // await removeExistingRecords(props)
-
           await Migration.update({
           status: 'successful',
           message: 'Successfully copied.',
@@ -191,7 +170,7 @@ module.exports = {
           }, { where: { id: props.migration_id } });
         }
       })
-      await emptyDirFunc()
+      // await emptyDirFunc()
       return {
         msg: 'Successful'
       }

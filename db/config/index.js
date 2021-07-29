@@ -6,5 +6,5 @@ module.exports = {
     "database": config.database,
     "host": config.host,
     "port": config.port,
-    "dialect": 'postgres'
+    "dialect": config.dialect
 }

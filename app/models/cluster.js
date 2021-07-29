@@ -23,7 +23,8 @@ module.exports = (sequelize, DataTypes) => {
     description: { type: DataTypes.TEXT },
     rds_hostname: { type: DataTypes.STRING(100) },
     created_by: DataTypes.INTEGER,
-    updated_by: DataTypes.INTEGER
+    updated_by: DataTypes.INTEGER,
+    shard_number: DataTypes.INTEGER,
   }, {
     sequelize,
     modelName: 'Cluster',

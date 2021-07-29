@@ -4,34 +4,36 @@ const cors = require('cors');
 const passport = require('passport');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
-
-require('dotenv').config({ path: process.env.NODE_ENV === 'production' ? `${__dirname}//.env.${(process.env.NODE_ENV)}` : `${__dirname}\\.env.${(process.env.NODE_ENV)}` });
-
-//require('dotenv').config()
+const config = require('./config');
+const MemoryStore = require('memorystore')(session)
 
 //middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? 'http://172.25.2.189' : "http://localhost:3000",
+    origin: config.serverUrl,
     credentials: true
 }));
 
-/* if (app.get('env') === 'production') {
-    app.set('trust proxy', 1) // trust first proxy
-    sess.cookie.secure = true // serve secure cookies
-      cookie: { secure: true }
-} */
-
-app.use(session({
+let sess = {
     secret: 'rsu_secret',
     name: 'rsu_secret',
     resave: true,
     saveUninitialized: true,
     cookie: {
         maxAge: 24 * 60 * 60 * 1000
-    }
-}))
+    },
+    store: new MemoryStore({
+        checkPeriod: 24 * 60 * 60 * 1000 // prune expired entries every 24h
+    }),
+}
+
+// if (app.get('env') === 'production') {
+//     app.set('trust proxy', 1) // trust first proxy
+//     sess.cookie.secure = true // serve secure cookies
+// }
+
+app.use(session(sess))
 
 app.use(cookieParser('rsu_secret'));
 app.use(passport.initialize());
@@ -45,7 +47,9 @@ require('./app/auth/passport-jwt/passport')(passport)
 require('./app/routes')(app, passport);
 
 //error handler
-app.use((error, req, res, next) => { next(error) })
+app.use((error, req, res, next) => {
+    next(error)
+})
 app.use((error, req, res, next) => {
     const code = (!res.statusCode || res.statusCode === 200) ? 500 : res.statusCode
     const message = (error && error.message) ? error.message : error
@@ -56,4 +60,6 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log("Connected Rasi Universal Services @" + PORT);
 });
+
+//db.sync().then(() => {})
 

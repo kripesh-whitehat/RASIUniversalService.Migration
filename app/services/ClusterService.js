@@ -3,7 +3,7 @@ const Cluster = require('../models').Cluster;
 module.exports = {
 
     getAllClusters: async () => {
-        const clusters = await Cluster.findAll();
+        const clusters = await Cluster.findAll({ order: [['id', 'DESC']] });
         return clusters
     },
     getByID: async (req) => {
@@ -26,7 +26,7 @@ module.exports = {
             data.updated_by = 1;
             const updatedCluster = await Cluster.update(data, { where: { id: req.params.id } });
             return updatedCluster;
-        } catch (err) {            
+        } catch (err) {
             return (err.errors) ? { err: err.errors[0].message } : { err: err.name }
         }
     },
@@ -37,6 +37,10 @@ module.exports = {
         } catch (err) {
             return (err.errors) ? { err: err.errors[0].message } : { err: err.name }
         }
-    }
+    },
+    getAllClustersSpecificInfo: async () => {
+        const clusters = await Cluster.findAll({ attributes: ['cluster_name', 'slug', 'hostname', 'shard_number'] });
+        return clusters
+    },
 
 }

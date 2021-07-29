@@ -46,6 +46,14 @@ module.exports = {
         } catch (err) {
             ResponseManager.errorResponse(res, err.message)
         }
+    },
+    getAllClustersSpecificInfo: async (req, res) => {
+        try {
+            const response = await ClusterService.getAllClustersSpecificInfo();
+            ResponseManager.successResponse(res, Message.SUCCESS, response)
+        } catch (err) {
+            ResponseManager.errorResponse(res, err.message)
+        }
     }
 
 }
